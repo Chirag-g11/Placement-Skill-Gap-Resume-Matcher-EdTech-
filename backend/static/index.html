@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GATECHECK — Placement Skill-Gap &amp; Resume Matcher</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/3.4.3/tailwind.min.css"></script>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#12151B;
+    --panel:#1A1E27;
+    --panel-2:#20242F;
+    --line:#2E3340;
+    --paper:#EDEAE2;
+    --amber:#F0A23A;
+    --amber-dim:#8A6329;
+    --teal:#4FD1C5;
+    --coral:#EF6461;
+    --muted:#8B93A3;
+  }
+  html,body{background:var(--ink); font-family:'Space Grotesk',sans-serif; color:var(--paper);}
+  .mono{font-family:'IBM Plex Mono',monospace;}
+  .split-panel{
+    background:linear-gradient(180deg, var(--panel) 0%, var(--panel-2) 100%);
+    border:1px solid var(--line);
+  }
+  .board-row{border-bottom:1px dashed var(--line);}
+  .board-row:last-child{border-bottom:none;}
+  .flap{
+    display:inline-block;
+    background:#0D0F14;
+    border:1px solid var(--line);
+    border-radius:4px;
+    padding:0.15em 0.3em;
+    font-family:'IBM Plex Mono',monospace;
+    letter-spacing:0.02em;
+  }
+  .perforation{
+    background-image: radial-gradient(circle, var(--ink) 3px, transparent 3.5px);
+    background-size: 14px 14px;
+    background-position: -4px center;
+    height: 2px;
+  }
+  .stub-notch{
+    width:24px;height:24px;background:var(--ink);border-radius:50%;
+  }
+  .chip{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:0.72rem;
+    padding:0.28rem 0.6rem;
+    border-radius:999px;
+    display:inline-flex;
+    align-items:center;
+    gap:0.35rem;
+    border:1px solid var(--line);
+  }
+  .chip-matched{background:rgba(79,209,197,0.08); border-color:rgba(79,209,197,0.35); color:var(--teal);}
+  .chip-missing{background:rgba(239,100,97,0.08); border-color:rgba(239,100,97,0.35); color:var(--coral);}
+  .progress-track{background:#0D0F14; border:1px solid var(--line); border-radius:999px; overflow:hidden;}
+  .progress-fill{height:100%; border-radius:999px; transition: width 1.1s cubic-bezier(.16,1,.3,1);}
+  .dropzone{
+    border:1.5px dashed var(--line);
+    transition: border-color .2s, background .2s;
+  }
+  .dropzone.drag{border-color:var(--amber); background:rgba(240,162,58,0.06);}
+  .fade-in{animation: fadeIn .5s ease both;}
+  @keyframes fadeIn{from{opacity:0; transform:translateY(8px);} to{opacity:1; transform:translateY(0);}}
+  .score-ring-bg{stroke:#0D0F14;}
+  .ticket-scallop{
+    -webkit-mask-image: radial-gradient(circle 8px at 0 50%, transparent 8px, black 8.5px), radial-gradient(circle 8px at 100% 50%, transparent 8px, black 8.5px);
+    -webkit-mask-composite: source-in;
+    mask-composite: intersect;
+  }
+  ::-webkit-scrollbar{width:8px; height:8px;}
+  ::-webkit-scrollbar-track{background:var(--ink);}
+  ::-webkit-scrollbar-thumb{background:var(--line); border-radius:4px;}
+  .btn-primary{
+    background:var(--amber); color:#1A1206; font-weight:600;
+    transition: transform .15s ease, box-shadow .15s ease, background .15s ease;
+  }
+  .btn-primary:hover{ background:#f5b25a; box-shadow:0 0 0 4px rgba(240,162,58,0.15); }
+  .btn-primary:active{ transform: scale(0.98); }
+  .btn-primary:disabled{ opacity:0.45; cursor:not-allowed; box-shadow:none; }
+  textarea:focus, input:focus { outline: none; }
+  .glow-dot{box-shadow: 0 0 8px 2px currentColor;}
+</style>
+</head>
+<body class="min-h-screen">
+
+<!-- ============ HEADER ============ -->
+<header class="border-b" style="border-color:var(--line);">
+  <div class="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <div class="w-9 h-9 rounded-md flex items-center justify-center" style="background:var(--amber);">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M2 12L22 2L14 12L22 22L2 12Z" fill="#1A1206"/></svg>
+      </div>
+      <div>
+        <div class="font-semibold tracking-tight text-lg leading-none">GATECHECK</div>
+        <div class="mono text-[10px] tracking-widest" style="color:var(--muted);">PLACEMENT READINESS TERMINAL</div>
+      </div>
+    </div>
+    <div class="mono text-xs hidden sm:flex items-center gap-2" style="color:var(--muted);">
+      <span class="w-1.5 h-1.5 rounded-full glow-dot" style="background:var(--teal); color:var(--teal);"></span>
+      SYSTEM ONLINE 
+    </div>
+  </div>
+</header>
+
+<!-- ============ HERO / INPUT SCREEN ============ -->
+<main class="max-w-6xl mx-auto px-6 py-10">
+
+  <section id="intro" class="mb-10 fade-in">
+    <div class="max-w-2xl">
+      <div class="mono text-xs tracking-widest mb-3" style="color:var(--amber);">// WHY RESUMES GET REJECTED BEFORE A HUMAN SEES THEM</div>
+      <h1 class="text-3xl sm:text-4xl font-semibold tracking-tight leading-tight mb-3">
+        Your resume doesn't fail interviews. <br/> It fails the <span style="color:var(--amber);">gate</span> before them.
+      </h1>
+      <p class="text-sm sm:text-base" style="color:var(--muted);">
+        Applicant Tracking Systems silently reject most student resumes on keyword and format grounds alone.
+        GATECHECK parses your resume against a real job description, shows exactly what's missing, and builds
+        your personal flight plan to close the gap.
+      </p>
+    </div>
+  </section>
+
+  <!-- INPUT BOARDING COUNTER -->
+  <section id="input-section" class="split-panel rounded-2xl p-6 sm:p-8 fade-in">
+    <div class="grid md:grid-cols-2 gap-8">
+
+      <!-- Resume Upload -->
+      <div>
+        <div class="mono text-[11px] tracking-widest mb-2" style="color:var(--muted);">STEP 01 — CHECK IN YOUR RESUME</div>
+        <div id="dropzone" class="dropzone rounded-xl p-8 text-center cursor-pointer">
+          <input type="file" id="resumeInput" accept=".pdf,.docx,.txt" class="hidden"/>
+          <div id="dropzoneContent">
+            <svg class="mx-auto mb-3" width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="var(--amber)" stroke-width="1.5"><path d="M12 3v12m0-12l-4 4m4-4l4 4M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <div class="text-sm font-medium">Drop your resume here, or click to browse</div>
+            <div class="mono text-xs mt-1" style="color:var(--muted);">PDF · DOCX · TXT — max 5MB</div>
+          </div>
+          <div id="fileSelected" class="hidden">
+            <svg class="mx-auto mb-2" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="var(--teal)" stroke-width="1.5"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <div class="text-sm font-medium mono" id="fileName">—</div>
+            <div class="text-xs mt-1" style="color:var(--muted);">Boarded. Click to change file.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Job Description -->
+      <div>
+        <div class="mono text-[11px] tracking-widest mb-2" style="color:var(--muted);">STEP 02 — PASTE TARGET JOB DESCRIPTION</div>
+        <textarea id="jdInput" rows="7" placeholder="Paste the full job description here — the more complete, the more accurate your gap analysis will be..." class="w-full rounded-xl p-4 text-sm resize-none" style="background:#0D0F14; border:1px solid var(--line); color:var(--paper);"></textarea>
+        <div class="flex justify-between mt-1.5">
+          <span class="mono text-[11px]" style="color:var(--muted);" id="jdCharCount">0 characters</span>
+          <span class="mono text-[11px]" style="color:var(--muted);">Min. ~30 words recommended</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="mt-8 flex items-center gap-4">
+      <button id="analyzeBtn" disabled class="btn-primary px-6 py-3 rounded-lg text-sm">
+        ▸ RUN GAP ANALYSIS
+      </button>
+      <button id="demoBtn" class="mono text-xs underline" style="color:var(--muted);">or load a sample resume + JD</button>
+      <span id="errorMsg" class="mono text-xs" style="color:var(--coral);"></span>
+    </div>
+  </section>
+
+  <!-- LOADING -->
+  <section id="loading-section" class="hidden mt-8 text-center py-16 fade-in">
+    <div class="mono text-sm tracking-widest mb-3" style="color:var(--amber);" id="loadingText">SCANNING RESUME...</div>
+    <div class="w-64 mx-auto progress-track h-1.5">
+      <div class="progress-fill h-full" style="width:0%; background:var(--amber);" id="loadingBar"></div>
+    </div>
+  </section>
+
+  <!-- ============ RESULTS SCREEN ============ -->
+  <section id="results-section" class="hidden mt-10 fade-in">
+
+    <!-- BOARDING PASS SUMMARY -->
+    <div class="split-panel rounded-2xl overflow-hidden mb-8">
+      <div class="grid md:grid-cols-[1fr_auto_260px]">
+        <!-- Left: identity -->
+        <div class="p-6 sm:p-8">
+          <div class="mono text-[11px] tracking-widest mb-1" style="color:var(--amber);">BOARDING PASS</div>
+          <div class="text-2xl font-semibold tracking-tight mb-1" id="resultFileName">resume.pdf</div>
+          <div class="text-sm mb-6" style="color:var(--muted);">Placement Readiness Assessment</div>
+
+          <div class="grid grid-cols-3 gap-4">
+            <div>
+              <div class="mono text-[10px] tracking-widest" style="color:var(--muted);">MATCH SCORE</div>
+              <div class="mono text-2xl font-semibold" id="statMatch">—</div>
+            </div>
+            <div>
+              <div class="mono text-[10px] tracking-widest" style="color:var(--muted);">ATS FORMAT</div>
+              <div class="mono text-2xl font-semibold" id="statAts">—</div>
+            </div>
+            <div>
+              <div class="mono text-[10px] tracking-widest" style="color:var(--muted);">SKILLS FOUND</div>
+              <div class="mono text-2xl font-semibold" id="statSkills">—</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Perforation -->
+        <div class="hidden md:flex flex-col items-center justify-center px-2">
+          <div class="stub-notch -mb-3"></div>
+          <div class="w-px flex-1 border-l border-dashed" style="border-color:var(--line);"></div>
+          <div class="stub-notch -mt-3"></div>
+        </div>
+
+        <!-- Right: overall status -->
+        <div class="p-6 sm:p-8 flex flex-col items-center justify-center text-center" style="background:rgba(0,0,0,0.15);">
+          <div class="mono text-[10px] tracking-widest mb-2" style="color:var(--muted);">GATE STATUS</div>
+          <div class="relative w-28 h-28 mb-2">
+            <svg viewBox="0 0 100 100" class="w-full h-full -rotate-90">
+              <circle cx="50" cy="50" r="42" fill="none" stroke-width="8" class="score-ring-bg"/>
+              <circle id="scoreRing" cx="50" cy="50" r="42" fill="none" stroke-width="8" stroke-linecap="round" stroke="var(--amber)" stroke-dasharray="264" stroke-dashoffset="264"/>
+            </svg>
+            <div class="absolute inset-0 flex items-center justify-center">
+              <span class="mono text-2xl font-bold" id="overallScoreText">0</span>
+            </div>
+          </div>
+          <div class="mono text-xs font-semibold tracking-wide" id="overallStatusLabel" style="color:var(--amber);">CALCULATING</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MATCHED / MISSING SKILLS -->
+    <div class="grid lg:grid-cols-2 gap-6 mb-8">
+      <div class="split-panel rounded-2xl p-6">
+        <div class="flex items-center justify-between mb-4">
+          <div class="mono text-[11px] tracking-widest" style="color:var(--teal);">✓ SKILLS ON BOARD</div>
+          <span class="mono text-xs" style="color:var(--muted);" id="matchedCount">0</span>
+        </div>
+        <div id="matchedSkills" class="flex flex-wrap gap-2"></div>
+      </div>
+      <div class="split-panel rounded-2xl p-6">
+        <div class="flex items-center justify-between mb-4">
+          <div class="mono text-[11px] tracking-widest" style="color:var(--coral);">✕ MISSING FOR THIS ROLE</div>
+          <span class="mono text-xs" style="color:var(--muted);" id="missingCount">0</span>
+        </div>
+        <div id="missingSkills" class="flex flex-wrap gap-2"></div>
+      </div>
+    </div>
+
+    <!-- CATEGORY BREAKDOWN -->
+    <div class="split-panel rounded-2xl p-6 sm:p-8 mb-8">
+      <div class="mono text-[11px] tracking-widest mb-5" style="color:var(--amber);">DEPARTURE BOARD — SKILL CATEGORY COVERAGE</div>
+      <div id="categoryBoard" class="space-y-0"></div>
+    </div>
+
+    <!-- ATS CHECKLIST -->
+    <div class="split-panel rounded-2xl p-6 sm:p-8 mb-8">
+      <div class="mono text-[11px] tracking-widest mb-5" style="color:var(--amber);">SECURITY CHECKPOINT — ATS FORMAT AUDIT</div>
+      <div id="atsChecklist" class="grid sm:grid-cols-2 gap-3"></div>
+    </div>
+
+    <!-- ROADMAP -->
+    <div class="split-panel rounded-2xl p-6 sm:p-8 mb-8">
+      <div class="flex items-center justify-between mb-5 flex-wrap gap-2">
+        <div class="mono text-[11px] tracking-widest" style="color:var(--amber);">FLIGHT PLAN — YOUR ROUTE TO READINESS</div>
+        <div class="mono text-xs" style="color:var(--muted);">Est. <span id="roadmapWeeks">0</span> weeks total</div>
+      </div>
+      <div id="roadmapList" class="space-y-3"></div>
+    </div>
+
+    <div class="text-center pb-10">
+      <button id="resetBtn" class="mono text-xs underline" style="color:var(--muted);">↺ run a new analysis</button>
+    </div>
+  </section>
+
+</main>
+
+<footer class="border-t py-6" style="border-color:var(--line);">
+  <div class="max-w-6xl mx-auto px-6 text-center mono text-[11px]" style="color:var(--muted);">
+    GATECHECK — Placement Skill-Gap &amp; Resume Matcher
+  </div>
+</footer>
+
+<script>
+// Same-origin by default: since Flask now serves this page directly, this
+// works automatically on whatever host/port the server is running on.
+const API_BASE = window.GATECHECK_API_BASE || "";
+
+const dropzone = document.getElementById('dropzone');
+const resumeInput = document.getElementById('resumeInput');
+const dropzoneContent = document.getElementById('dropzoneContent');
+const fileSelected = document.getElementById('fileSelected');
+const fileNameEl = document.getElementById('fileName');
+const jdInput = document.getElementById('jdInput');
+const jdCharCount = document.getElementById('jdCharCount');
+const analyzeBtn = document.getElementById('analyzeBtn');
+const errorMsg = document.getElementById('errorMsg');
+const demoBtn = document.getElementById('demoBtn');
+
+let selectedFile = null;
+
+dropzone.addEventListener('click', () => resumeInput.click());
+['dragover','dragenter'].forEach(evt => dropzone.addEventListener(evt, e => { e.preventDefault(); dropzone.classList.add('drag'); }));
+['dragleave','drop'].forEach(evt => dropzone.addEventListener(evt, e => { e.preventDefault(); dropzone.classList.remove('drag'); }));
+dropzone.addEventListener('drop', e => {
+  const f = e.dataTransfer.files[0];
+  if (f) { selectedFile = f; showFile(f); }
+});
+resumeInput.addEventListener('change', e => {
+  const f = e.target.files[0];
+  if (f) { selectedFile = f; showFile(f); }
+});
+
+function showFile(f){
+  dropzoneContent.classList.add('hidden');
+  fileSelected.classList.remove('hidden');
+  fileNameEl.textContent = f.name;
+  validateForm();
+}
+
+jdInput.addEventListener('input', () => {
+  jdCharCount.textContent = `${jdInput.value.length} characters`;
+  validateForm();
+});
+
+function validateForm(){
+  const ok = selectedFile && jdInput.value.trim().length >= 30;
+  analyzeBtn.disabled = !ok;
+}
+
+demoBtn.addEventListener('click', async () => {
+  jdInput.value = "We are looking for a Software Engineer proficient in Python, Django, REST API design, Docker, AWS, PostgreSQL, and Kubernetes. Experience with React, system design, and microservices architecture is a strong plus. Strong problem solving and communication skills required. Familiarity with CI/CD pipelines and Agile methodology preferred. Bachelor's degree in Computer Science or related field.";
+  jdCharCount.textContent = `${jdInput.value.length} characters`;
+  const demoText = "John Doe\njohn.doe@email.com | +91 9876543210 | linkedin.com/in/johndoe | github.com/johndoe\n\nEDUCATION\nB.Tech in Computer Science, ABC University, 2022-2026, CGPA: 8.5\n\nSKILLS\nPython, Java, HTML, CSS, JavaScript, React, Git, MySQL, Data Structures\n\nPROJECTS\nBuilt a personal portfolio website using React and Tailwind CSS.\nDeveloped a student management system using Python and MySQL.\nCreated a REST API for a to-do list application using Flask.\n\nEXPERIENCE\nSoftware Engineering Intern, XYZ Corp, Summer 2025\nImplemented new features and fixed bugs in the company's web application.\nCollaborated with a team of 5 developers using Git and Agile methodology.";
+  selectedFile = new File([demoText], "demo_resume.txt", {type:"text/plain"});
+  showFile(selectedFile);
+});
+
+analyzeBtn.addEventListener('click', runAnalysis);
+document.getElementById('resetBtn').addEventListener('click', () => {
+  document.getElementById('results-section').classList.add('hidden');
+  document.getElementById('input-section').classList.remove('hidden');
+  document.getElementById('intro').classList.remove('hidden');
+  window.scrollTo({top:0, behavior:'smooth'});
+});
+
+async function runAnalysis(){
+  errorMsg.textContent = "";
+  document.getElementById('input-section').classList.add('hidden');
+  document.getElementById('intro').classList.add('hidden');
+  document.getElementById('loading-section').classList.remove('hidden');
+
+  const loadingSteps = ["PARSING RESUME...", "EXTRACTING SKILLS FROM JOB DESCRIPTION...", "COMPUTING MATCH SCORE...", "BUILDING FLIGHT PLAN..."];
+  const loadingText = document.getElementById('loadingText');
+  const loadingBar = document.getElementById('loadingBar');
+  let step = 0;
+  loadingBar.style.width = "10%";
+  const stepInterval = setInterval(() => {
+    step = (step + 1) % loadingSteps.length;
+    loadingText.textContent = loadingSteps[step];
+    loadingBar.style.width = `${20 + step * 22}%`;
+  }, 700);
+
+  const formData = new FormData();
+  formData.append('resume', selectedFile);
+  formData.append('job_description', jdInput.value.trim());
+
+  try {
+    const res = await fetch(`${API_BASE}/api/analyze`, { method: 'POST', body: formData });
+    const data = await res.json();
+    clearInterval(stepInterval);
+    loadingBar.style.width = "100%";
+
+    if (!res.ok) {
+      document.getElementById('loading-section').classList.add('hidden');
+      document.getElementById('input-section').classList.remove('hidden');
+      document.getElementById('intro').classList.remove('hidden');
+      errorMsg.textContent = data.error || "Something went wrong. Please try again.";
+      return;
+    }
+
+    setTimeout(() => {
+      document.getElementById('loading-section').classList.add('hidden');
+      renderResults(data);
+      document.getElementById('results-section').classList.remove('hidden');
+      window.scrollTo({top: 0, behavior:'smooth'});
+    }, 400);
+
+  } catch (err) {
+    clearInterval(stepInterval);
+    document.getElementById('loading-section').classList.add('hidden');
+    document.getElementById('input-section').classList.remove('hidden');
+    document.getElementById('intro').classList.remove('hidden');
+    errorMsg.textContent = "Could not reach the analysis server. Make sure python app.py is still running in your terminal, then reload this page.";
+  }
+}
+
+function renderResults(data){
+  const match = data.match;
+  const ats = data.ats;
+  const roadmap = data.roadmap;
+
+  document.getElementById('resultFileName').textContent = data.meta.resume_filename;
+  document.getElementById('statMatch').textContent = `${match.final_match_score}%`;
+  document.getElementById('statAts').textContent = `${ats.ats_format_score}%`;
+  document.getElementById('statSkills').textContent = `${match.resume_skill_count}/${match.jd_skill_count + match.resume_skill_count}`;
+
+  // Overall score ring
+  const overall = data.overall_readiness_score;
+  const circumference = 264;
+  const ring = document.getElementById('scoreRing');
+  const offset = circumference - (overall/100)*circumference;
+  let ringColor = 'var(--coral)';
+  let statusLabel = 'GATE HELD — NEEDS WORK';
+  if (overall >= 75) { ringColor = 'var(--teal)'; statusLabel = 'CLEARED FOR TAKEOFF'; }
+  else if (overall >= 45) { ringColor = 'var(--amber)'; statusLabel = 'CONDITIONAL BOARDING'; }
+  ring.style.stroke = ringColor;
+  document.getElementById('overallStatusLabel').style.color = ringColor;
+  document.getElementById('overallStatusLabel').textContent = statusLabel;
+  document.getElementById('overallScoreText').textContent = Math.round(overall);
+  setTimeout(() => { ring.style.transition = 'stroke-dashoffset 1.2s cubic-bezier(.16,1,.3,1)'; ring.style.strokeDashoffset = offset; }, 100);
+
+  // Matched skills
+  const matchedEl = document.getElementById('matchedSkills');
+  matchedEl.innerHTML = match.matched_skills.length ? match.matched_skills.map(s =>
+    `<span class="chip chip-matched">${escapeHtml(s)}</span>`).join('') :
+    `<span class="text-sm" style="color:var(--muted);">No overlapping skills detected yet.</span>`;
+  document.getElementById('matchedCount').textContent = match.matched_skills.length;
+
+  // Missing skills
+  const missingEl = document.getElementById('missingSkills');
+  missingEl.innerHTML = match.missing_skills.length ? match.missing_skills.map(s =>
+    `<span class="chip chip-missing">${escapeHtml(s)}</span>`).join('') :
+    `<span class="text-sm" style="color:var(--muted);">Great news — no critical gaps found!</span>`;
+  document.getElementById('missingCount').textContent = match.missing_skills.length;
+
+  // Category breakdown board
+  const boardEl = document.getElementById('categoryBoard');
+  boardEl.innerHTML = '';
+  Object.entries(match.category_breakdown).forEach(([cat, info]) => {
+    if (info.score === null) return; // JD didn't require this category
+    const barColor = info.score >= 70 ? 'var(--teal)' : info.score >= 40 ? 'var(--amber)' : 'var(--coral)';
+    boardEl.innerHTML += `
+      <div class="board-row py-3 grid grid-cols-[140px_1fr_50px] sm:grid-cols-[180px_1fr_60px] items-center gap-4">
+        <div class="text-xs sm:text-sm font-medium truncate">${escapeHtml(cat)}</div>
+        <div class="progress-track h-2">
+          <div class="progress-fill h-full" style="width:${info.score}%; background:${barColor};"></div>
+        </div>
+        <div class="mono text-xs text-right" style="color:${barColor};">${info.score}%</div>
+      </div>`;
+  });
+
+  // ATS checklist
+  const atsEl = document.getElementById('atsChecklist');
+  atsEl.innerHTML = ats.checklist.map(item => `
+    <div class="flex items-start gap-2.5 p-3 rounded-lg" style="background:rgba(0,0,0,0.15); border:1px solid var(--line);">
+      <span class="mt-0.5 text-sm" style="color:${item.passed ? 'var(--teal)' : 'var(--coral)'};">${item.passed ? '✓' : '✕'}</span>
+      <div>
+        <div class="text-sm font-medium">${escapeHtml(item.check)}</div>
+        ${item.tip ? `<div class="text-xs mt-0.5" style="color:var(--muted);">${escapeHtml(item.tip)}</div>` : ''}
+      </div>
+    </div>`).join('');
+
+  // Roadmap
+  document.getElementById('roadmapWeeks').textContent = roadmap.estimated_total_weeks;
+  const roadmapEl = document.getElementById('roadmapList');
+  if (roadmap.roadmap.length === 0) {
+    roadmapEl.innerHTML = `<div class="text-sm text-center py-6" style="color:var(--muted);">No major skill gaps — you're ready to apply! Focus on tailoring your bullet points instead.</div>`;
+  } else {
+    roadmapEl.innerHTML = roadmap.roadmap.map((item, i) => `
+      <div class="flex gap-4 p-4 rounded-lg" style="background:rgba(0,0,0,0.15); border:1px solid var(--line);">
+        <div class="flex-shrink-0 w-14 text-center">
+          <div class="mono text-[10px]" style="color:var(--muted);">WEEK</div>
+          <div class="mono text-lg font-semibold" style="color:var(--amber);">${item.start_week}</div>
+        </div>
+        <div class="w-px" style="background:var(--line);"></div>
+        <div class="flex-1">
+          <div class="flex items-center gap-2 flex-wrap mb-1">
+            <span class="font-semibold text-sm">${escapeHtml(item.skill)}</span>
+            <span class="mono text-[10px] px-1.5 py-0.5 rounded" style="background:rgba(240,162,58,0.1); color:var(--amber);">${escapeHtml(item.category)}</span>
+            <span class="mono text-[10px] px-1.5 py-0.5 rounded" style="background:rgba(255,255,255,0.06); color:var(--muted);">${escapeHtml(item.difficulty)}</span>
+          </div>
+          <div class="text-xs" style="color:var(--muted);">${escapeHtml(item.resource)} · <span class="mono">${escapeHtml(item.estimated_time)}</span></div>
+        </div>
+      </div>`).join('');
+  }
+}
+
+function escapeHtml(str){
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+</script>
+</body>
+</html>
