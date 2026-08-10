@@ -70,6 +70,8 @@
   @keyframes fadeIn{from{opacity:0; transform:translateY(8px);} to{opacity:1; transform:translateY(0);}}
   .score-ring-bg{stroke:#0D0F14;}
   .ticket-scallop{
+    /* Standard property for broader browser compatibility */
+    mask-image: radial-gradient(circle 8px at 0 50%, transparent 8px, black 8.5px), radial-gradient(circle 8px at 100% 50%, transparent 8px, black 8.5px);
     -webkit-mask-image: radial-gradient(circle 8px at 0 50%, transparent 8px, black 8.5px), radial-gradient(circle 8px at 100% 50%, transparent 8px, black 8.5px);
     -webkit-mask-composite: source-in;
     mask-composite: intersect;
@@ -335,12 +337,57 @@ demoBtn.addEventListener('click', async () => {
   showFile(selectedFile);
 });
 
-analyzeBtn.addEventListener('click', runAnalysis);
-document.getElementById('resetBtn').addEventListener('click', () => {
+// ---------- View switching + Back button support ----------
+function showHomeView(){
   document.getElementById('results-section').classList.add('hidden');
+  document.getElementById('loading-section').classList.add('hidden');
   document.getElementById('input-section').classList.remove('hidden');
   document.getElementById('intro').classList.remove('hidden');
+
+  // Reset the form fields
+  selectedFile = null;
+  resumeInput.value = '';
+  jdInput.value = '';
+  jdCharCount.textContent = '0 characters';
+  dropzoneContent.classList.remove('hidden');
+  fileSelected.classList.add('hidden');
+  fileNameEl.textContent = '—';
+  errorMsg.textContent = '';
+  analyzeBtn.disabled = true;
+
   window.scrollTo({top:0, behavior:'smooth'});
+}
+
+function showResultsView(){
+  document.getElementById('input-section').classList.add('hidden');
+  document.getElementById('intro').classList.add('hidden');
+  document.getElementById('loading-section').classList.add('hidden');
+  document.getElementById('results-section').classList.remove('hidden');
+  window.scrollTo({top:0, behavior:'smooth'});
+}
+
+// पहली बार page load होने पर इसे "home" state मानो
+history.replaceState({ view: 'home' }, '', window.location.pathname);
+
+// जब user browser का Back/Forward button दबाए
+window.addEventListener('popstate', (event) => {
+  const view = event.state ? event.state.view : 'home';
+  if (view === 'results' && window.lastResultsData) {
+    renderResults(window.lastResultsData);
+    showResultsView();
+  } else {
+    showHomeView();
+  }
+});
+
+analyzeBtn.addEventListener('click', runAnalysis);
+document.getElementById('resetBtn').addEventListener('click', () => {
+  if (history.state && history.state.view === 'results') {
+    history.back();
+  } else {
+    showHomeView();
+  }
+
 });
 
 async function runAnalysis(){
@@ -379,11 +426,13 @@ async function runAnalysis(){
     }
 
     setTimeout(() => {
-      document.getElementById('loading-section').classList.add('hidden');
-      renderResults(data);
-      document.getElementById('results-section').classList.remove('hidden');
-      window.scrollTo({top: 0, behavior:'smooth'});
-    }, 400);
+    document.getElementById('loading-section').classList.add('hidden');
+    window.lastResultsData = data;              // ← नया: data cache करो
+    renderResults(data);
+    document.getElementById('results-section').classList.remove('hidden');
+    history.pushState({ view: 'results' }, '', '#results');   // ← नया: history में add करो
+    window.scrollTo({top: 0, behavior:'smooth'});
+  }, 400);
 
   } catch (err) {
     clearInterval(stepInterval);
